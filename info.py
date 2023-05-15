@@ -1,3 +1,5 @@
+import sys
+import psutil
 import streamlit as st
 
 from lib.db import add_video, query_video, upd_video
@@ -28,9 +30,13 @@ def show_meta(refresh: bool):
 
         st.title(title)
         tags = show_tags(aid, cid, show=True)
-        video_dict = query_video(cid)
         if debug:
-            cid, video_dict
+            cid
+            sys.platform
+            for p in psutil.process_iter():
+                print(p.name())  # 进程名
+        video_dict = query_video(cid)
+
         if video_dict:
             if refresh:
                 upd_video(cid, pic=img_url, tags=tags, title=title, desc=wrapped,

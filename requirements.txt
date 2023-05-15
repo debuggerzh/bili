@@ -53,3 +53,4 @@ plotly
 selenium
 SQLAlchemy
 retrying
+psutil
