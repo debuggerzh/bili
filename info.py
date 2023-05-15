@@ -29,6 +29,8 @@ def show_meta(refresh: bool):
         st.title(title)
         tags = show_tags(aid, cid, show=True)
         video_dict = query_video(cid)
+        if debug:
+            cid, video_dict
         if video_dict:
             if refresh:
                 upd_video(cid, pic=img_url, tags=tags, title=title, desc=wrapped,
@@ -86,6 +88,7 @@ with st.sidebar:
     vid_url = st.text_input('Please input video url:', key='vid_url',
                             on_change=show_meta, args=(st.session_state.flush,))
     flush = st.checkbox('Force flush database', key='flush')
+    debug = st.checkbox('DEBUG')
     start = st.button('Start', on_click=show_meta, args=(st.session_state.flush,))
 # def show_hot_danmakus(danmakus_csv: str, cid: int):
 #     df = Crawl.crawl_save(danmakus_csv.format(cid), cid, _need_likes=False)
