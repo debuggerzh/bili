@@ -1,5 +1,6 @@
 import sys
-
+if sys.platform.startswith('linux'):
+    sys.path.append('/app/bili')
 import streamlit as st
 
 from lib.db import add_video, query_video, upd_video
@@ -7,8 +8,8 @@ from lib.meta import get_metadata, get_raw
 from lib.util import *
 
 types = ('view', 'danmaku', 'like', 'coin', 'favorite', 'share', 'reply')
-if sys.platform.startswith('linux'):
-    sys.path.append('/app/bili')
+
+
 
 # todo 合三为一！
 
