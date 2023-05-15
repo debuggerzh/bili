@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from lib.crc32 import crack
 from lib.util import Crawl, get_up_info
 
-engine = create_engine('mysql+pymysql://root:123456@127.0.0.1/bili')
+engine = create_engine('mysql+pymysql://root:123456@127.0.0.1:3306/bili')
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -241,7 +241,7 @@ class DBUtil:
         import pymysql
         conn = pymysql.connect(
             user='root', password='123456', host='127.0.0.1',
-            database='bili', charset='utf8mb4',
+            database='bili', charset='utf8mb4', port=3306,
             cursorclass=pymysql.cursors.Cursor
         )
         return conn
