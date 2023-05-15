@@ -179,9 +179,8 @@ class Contstant:
     INTERVAL = 60
     POSITIVE = 1
     NEGATIVE = -1
-    RESOURCE_DIRECTORY = 'resources\\'
-    back_path = r'resources\btv.jpg'  # 换用jpg
-    font_path = r'resources\vista_black.ttf'
+    back_path = os.path.join('resources', 'btv.jpg')
+    font_path = os.path.join('resources', 'vista_black.ttf')
 
 
 class Util:
@@ -190,20 +189,20 @@ class Util:
     level_types = {'most': 8, 'very': 6, 'more': 4,
                    'ish': 2, 'insufficient': 0.5, 'inverse': -1}
 
-    all_path = os.path.join(Contstant.RESOURCE_DIRECTORY, 'dicts\\jieba_sentiment.txt')
-    abbr_path = os.path.join(Contstant.RESOURCE_DIRECTORY, 'abbr.txt')
+    all_path = os.path.join('resources', 'dicts', 'jieba_sentiment.txt')
+    abbr_path = os.path.join('resources', 'abbr.txt')
 
-    stop_words_path = r'%sstop.txt' % Contstant.RESOURCE_DIRECTORY
-    positive_words_path = r'%sdicts\positive.txt' % Contstant.RESOURCE_DIRECTORY
-    negative_words_path = r'%sdicts\negative.txt' % Contstant.RESOURCE_DIRECTORY
+    stop_words_path = os.path.join('resources', 'stop.txt')
+    positive_words_path = os.path.join('resources', 'positive.txt')
+    negative_words_path = os.path.join('resources', 'negative.txt')
 
-    most_words_path = r'%sdicts\most.txt' % Contstant.RESOURCE_DIRECTORY
-    very_words_path = r'%sdicts\very.txt' % Contstant.RESOURCE_DIRECTORY
-    more_words_path = r'%sdicts\more.txt' % Contstant.RESOURCE_DIRECTORY
+    most_words_path = os.path.join('resources', 'dicts', 'most.txt')
+    very_words_path = os.path.join('resources', 'dicts', 'very.txt')
+    more_words_path = os.path.join('resources', 'dicts', 'more.txt')
     # ish表大约，大概，左右
-    ish_words_path = r'%sdicts\ish.txt' % Contstant.RESOURCE_DIRECTORY
-    insufficient_words_path = r'%sdicts\insufficient.txt' % Contstant.RESOURCE_DIRECTORY
-    inverse_words_path = r'%sdicts\inverse.txt' % Contstant.RESOURCE_DIRECTORY
+    ish_words_path = os.path.join('resources', 'dicts', 'ish.txt')
+    insufficient_words_path = os.path.join('resources', 'dicts', 'insufficient.txt')
+    inverse_words_path = os.path.join('resources', 'dicts', 'inverse.txt')
 
     paths = [stop_words_path, positive_words_path, negative_words_path,
              most_words_path, very_words_path, more_words_path, ish_words_path,
@@ -226,7 +225,7 @@ class Util:
                 k, v = line.split(':')
                 self.abbr_dict[k] = v
 
-        df = pd.read_csv(os.path.join(Contstant.RESOURCE_DIRECTORY, 'dicts/multi_dimen.csv'))
+        df = pd.read_csv(os.path.join('resources', 'dicts/multi_dimen.csv'))
         for emotion in Util.emotion_types:
             setattr(self, emotion + '_words', df[df['type'] == emotion]['word'].tolist())
 
