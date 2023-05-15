@@ -193,8 +193,8 @@ class Util:
     abbr_path = os.path.join('resources', 'abbr.txt')
 
     stop_words_path = os.path.join('resources', 'stop.txt')
-    positive_words_path = os.path.join('resources', 'positive.txt')
-    negative_words_path = os.path.join('resources', 'negative.txt')
+    positive_words_path = os.path.join('resources', 'dicts', 'positive.txt')
+    negative_words_path = os.path.join('resources', 'dicts', 'negative.txt')
 
     most_words_path = os.path.join('resources', 'dicts', 'most.txt')
     very_words_path = os.path.join('resources', 'dicts', 'very.txt')
