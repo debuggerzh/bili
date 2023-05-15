@@ -1,0 +1,14 @@
+/.pytest_cache/
+/venv/
+/out.ass
+/report.xlsx
+/local_test.py
+/dmProto/
+/predict.csv
+/dm.proto
+/gen_gender_data.py
+/resources/predict*
+/resources/result.json
+/resources/threeKingdom/
+/resources/danmakus/
+/test/
