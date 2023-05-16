@@ -1,7 +1,7 @@
 critical_cookie = {
     'DedeUserID': '12696567',
-    'SESSDATA': 'b3381589%2C1699592988%2C377cf%2A52',
-    'bili_jct': '537db12561485d8eb0d9c73ee3bf552b'
+    'SESSDATA': '64789eb9%2C1699714272%2C871ad%2A52',
+    'bili_jct': '614e04198757176c92f72258518e0b1b'
 }
 date_headers = {
     "referer": "https://www.bilibili.com/",

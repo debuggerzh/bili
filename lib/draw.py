@@ -15,6 +15,7 @@ from pandas import DataFrame
 from requests import RequestException
 from wordcloud import WordCloud
 
+from lib.db import query_danmaku_by_date
 from lib.info import user_headers
 from lib.meta import get_cid
 from lib.sentiment import sentiment_analyze, get_distribution
@@ -187,7 +188,8 @@ def draw_multi_history_bars(_vid: str, cid: int, samples: int):
         dt_range = dt_range[:step * samples:step]
     results = []
     for dt in dt_range:
-        dmk_list = dm_history(cid, dt)
+        # dmk_list = dm_history(cid, dt)
+        dmk_list = query_danmaku_by_date(cid, dt)
         counter, _ = sentiment_analyze(dmk_list, True)
         results.append(tuple(counter.values()))
     fig, axs = plt.subplots(8, 1, sharex='all')
@@ -221,7 +223,8 @@ def draw_history_bars(_vid: str, cid: int, samples: int):
     #     os.mkdir(cur_directory)
     results = []
     for dt in dt_range:
-        dmk_list = dm_history(cid, dt)
+        # dmk_list = dm_history(cid, dt)
+        dmk_list = query_danmaku_by_date(cid, dt)
         counter, _ = sentiment_analyze(dmk_list)
         results.append(tuple(counter.values()))
     posi = [x[0] for x in results]
