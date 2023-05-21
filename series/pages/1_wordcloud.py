@@ -10,7 +10,7 @@ if 'meta' not in sst:
     st.error('Please start from infomation page.')
     st.stop()
 meta = sst.meta
-load_side(meta)
+load_side()
 mid = sst.mid
 ep_num = sst.episode
 dmk_dir = os.path.join("series", str(mid))
@@ -33,7 +33,7 @@ def load_series(suffix: str = '') -> list:
     return all_text
 
 
-def show_cloud():
+def show_series_cloud():
     with st.spinner('正在生成弹幕词云...'):
         if sst.all:  # 全剧集词云
             if sst.dis_hist:  # 禁历史
@@ -52,4 +52,4 @@ def show_cloud():
         st.pyplot(figure)
 
 
-st.sidebar.button('Generate', on_click=show_cloud)  # 忽略返回值
+st.sidebar.button('Generate', on_click=show_series_cloud)  # 忽略返回值

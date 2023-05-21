@@ -109,7 +109,7 @@ class Crawl:
                 # icon = get_raw(data['face'])
                 # todo 目前已知data['school']可能为None，或可能有'name'，或'name'可能为空串
                 if 'school' in data and data['school']:
-                    if data['school']['name']:
+                    if 'name' in data['school']:
                         final_dict['school'] = data['school']['name']
                 else:
                     final_dict['school'] = ''
@@ -287,6 +287,8 @@ def auto_wrap(s: str, column=1):
     :param s: 需要自动换行的文本
     :return: 已自动换行的文本
     """
+    if not s:
+        return ''
     entire = 50
     part_sentence = s.split('\n')
     cutted = []
@@ -335,41 +337,18 @@ def dm_history(cid: int, date: str):
     return words
 
 
-if __name__ == '__main__':
-    vid_u = "https://www.bilibili.com/video/BV1XW411F7L6/?vd_source=58a41ac877c965b4616d2d9f764c219d"
-    # print(get_date_range(vid_url))
-    text = '''我真的觉得很恐怖，就是有一个人开盒了我在别的平台看直播的私人账号，然后开小号把这个账号发给了我的老公粉。跟我的老公粉说我背地里在看别的男主播，叫他们不要再喜欢我了不要再给我送礼物了。
-我觉得这个事情很恐怖啊，首先，这个人他真的很阴暗，其次，他是出于什么目的、出于什么身份的呢？
-他是我的粉丝？还是我的竞争对手？自己没有能力打倒我，就只能躲在阴暗的角落里，想要借刀杀人，传我和别的男人的绯闻，然后利用我粉丝对我的爱，想让我粉丝把我一刀捅死是吧。
-真的很恐怖，连外卖都不敢点了，就怕有人蹲在我家门口，我一开门“你就是浅川玉乃是吧 就是你偷看男主播是吧”然后 碰！给我一刀噶了
-关于我看这个主播，是从我小时开始就在看，之前的视频里也有说过，他真的是一个非常非常好，非常非常正能量的人，我从他身上学到了很多做人的道理。而且，他也有一个妹妹，然后我有一个哥哥。而且他和她妹妹的年龄差和我和我哥的年龄差差不多，他需要赚钱养妹妹，我需要赚钱养家，所以我感觉，他愿意搭理一个我这样的小粉丝，应该也有一些共鸣吧。
-所以真的不要把所有人对主播的喜欢和支持都想得那么肮脏，不是所有人给主播送礼物都是想要追求主播想和主播结婚。但是那个开小号盒我的人，肯定是这样想的。他觉得我看男主播，就是喜欢他，对他有非分之想，就觉得我的粉丝很傻逼，想利用他们一刀捅死我。
-以及我觉得，人肉这个事情，本来就是违法的，我们应该痛斥这个盒狗。我和我的粉丝都没有做错什么，做错的是这个盒狗。
-然后我注销账号的原因，第一是因为我想让我的粉丝安心，我真的不想和这个主播结婚，他就是我哥哥、我偶像、我想成为的人的一个这样的存在，而且，人家那么优秀，也不会喜欢我。
-第二，我认为过去的事情为何珍贵，珍贵的是你拥有的这一个独一无二的经历，它是刻在你的骨头里的是永远铭记于心的，是任何人都无法夺走的。而且，珍贵的不是“账号”而是“人”。我的偶像不会因为我换了一个账号就不认识我，回忆是相互的，他记得我的故事，记忆并不会因为账号的消失而消失。我喜欢的也只是他的灵魂，他积极向上的态度，和正能量的三观。
-我们对于喜欢的人，给予支持、传达爱意，但是不能太过于极端，喜欢一个人，并不一定就要得到她。只需要看到她在你能看到的地方过得很好，有因为你的支持越来越好，就好了。偶像的存在，更多的是传达梦想，以及积极的共鸣，和粉丝共勉，共同进步，越过越好。
-不要让爱，变成一种枷锁。
-我永远也不会想要得到我的偶像，因为星星，只需要在我看得见的地方闪闪发光就好了。'''
-    ccid = 42177257
-
-    pprint(Crawl.get_space_info(276134779))
-    # dmid = 30370332169732101
-    # print(auto_wrap(text))
-    # Crawl.get_dm_likes(ccid, dmid)
-
-
-def load_side(metadata: dict, sentiment=False):
+def load_side():
     """
 
     :param sentiment: True时禁用复选框，从而禁用日期选择
-    :param metadata:
     :return: date为None表示全弹幕
     """
+    metadata = st.session_state.meta
     with st.sidebar:
         show_all = st.checkbox('显示全剧集词云', key='all')
         ep: int = st.number_input('请输入集数', 1, metadata['total'], disabled=show_all,
                                   key='episode')
-        disable_hist = st.checkbox('禁用历史日期', value=True, disabled=sentiment,
+        disable_hist = st.checkbox('禁用历史日期', value=True,
                                    key='dis_hist')
         if not disable_hist:
             date_range = get_date_range(metadata['episodes'][ep - 1]['bvid'])
@@ -481,7 +460,7 @@ def store_sessssion_state(metadata, vid_url):
 
 
 def rearrange_stat(stat, metric=False):
-    types = ('view', 'danmaku', 'like', 'coin', 'favorite', 'share', 'reply')
+    from lib.info import types
     trans = {'view': '播放量', 'views': '播放量',
              'danmaku': '弹幕数', 'like': '点赞数', 'coin': '投币数', 'favorite': '收藏数',
              'share': '转发数', 'reply': '评论数'}
@@ -516,3 +495,51 @@ def rearrange_stat(stat, metric=False):
 def convert_df(df, encoding='utf-8'):
     # IMPORTANT: Cache the conversion to prevent computation on every rerun
     return df.to_csv().encode(encoding)
+
+
+@retry(retry_on_exception=lambda e: isinstance(e, KeyError))
+def get_user_videos(uid):
+    search_url = 'https://api.bilibili.com/x/space/arc/search'
+    params = {'mid': uid, 'ps': 30, 'tid': 0, 'pn': 1, 'keyword': '',
+              'order': 'click'  # 按点击量降序
+              }
+    resp = requests.get(search_url, params, headers=user_headers, stream=True)
+    try:
+        data = resp.json()['data']
+    except RequestException:
+        decoder = json.JSONDecoder()
+        text = resp.text
+        while text:
+            json_data, index = decoder.raw_decode(text)
+            text = text[index:].lstrip()
+            if 'data' in json_data:
+                data = json_data['data']
+                break
+    videos = data['list']['vlist']
+    return videos
+
+
+if __name__ == '__main__':
+    vid_u = "https://www.bilibili.com/video/BV1XW411F7L6/?vd_source=58a41ac877c965b4616d2d9f764c219d"
+    # print(get_date_range(vid_url))
+    text = '''我真的觉得很恐怖，就是有一个人开盒了我在别的平台看直播的私人账号，然后开小号把这个账号发给了我的老公粉。跟我的老公粉说我背地里在看别的男主播，叫他们不要再喜欢我了不要再给我送礼物了。
+我觉得这个事情很恐怖啊，首先，这个人他真的很阴暗，其次，他是出于什么目的、出于什么身份的呢？
+他是我的粉丝？还是我的竞争对手？自己没有能力打倒我，就只能躲在阴暗的角落里，想要借刀杀人，传我和别的男人的绯闻，然后利用我粉丝对我的爱，想让我粉丝把我一刀捅死是吧。
+真的很恐怖，连外卖都不敢点了，就怕有人蹲在我家门口，我一开门“你就是浅川玉乃是吧 就是你偷看男主播是吧”然后 碰！给我一刀噶了
+关于我看这个主播，是从我小时开始就在看，之前的视频里也有说过，他真的是一个非常非常好，非常非常正能量的人，我从他身上学到了很多做人的道理。而且，他也有一个妹妹，然后我有一个哥哥。而且他和她妹妹的年龄差和我和我哥的年龄差差不多，他需要赚钱养妹妹，我需要赚钱养家，所以我感觉，他愿意搭理一个我这样的小粉丝，应该也有一些共鸣吧。
+所以真的不要把所有人对主播的喜欢和支持都想得那么肮脏，不是所有人给主播送礼物都是想要追求主播想和主播结婚。但是那个开小号盒我的人，肯定是这样想的。他觉得我看男主播，就是喜欢他，对他有非分之想，就觉得我的粉丝很傻逼，想利用他们一刀捅死我。
+以及我觉得，人肉这个事情，本来就是违法的，我们应该痛斥这个盒狗。我和我的粉丝都没有做错什么，做错的是这个盒狗。
+然后我注销账号的原因，第一是因为我想让我的粉丝安心，我真的不想和这个主播结婚，他就是我哥哥、我偶像、我想成为的人的一个这样的存在，而且，人家那么优秀，也不会喜欢我。
+第二，我认为过去的事情为何珍贵，珍贵的是你拥有的这一个独一无二的经历，它是刻在你的骨头里的是永远铭记于心的，是任何人都无法夺走的。而且，珍贵的不是“账号”而是“人”。我的偶像不会因为我换了一个账号就不认识我，回忆是相互的，他记得我的故事，记忆并不会因为账号的消失而消失。我喜欢的也只是他的灵魂，他积极向上的态度，和正能量的三观。
+我们对于喜欢的人，给予支持、传达爱意，但是不能太过于极端，喜欢一个人，并不一定就要得到她。只需要看到她在你能看到的地方过得很好，有因为你的支持越来越好，就好了。偶像的存在，更多的是传达梦想，以及积极的共鸣，和粉丝共勉，共同进步，越过越好。
+不要让爱，变成一种枷锁。
+我永远也不会想要得到我的偶像，因为星星，只需要在我看得见的地方闪闪发光就好了。'''
+    ccid = 42177257
+    # dmid = 30370332169732101
+    pprint(get_user_videos(3461565011462803))
+    # pprint(get_up_info(3461565011462803))
+    # pprint(Crawl.get_space_info(3461565011462803))
+    # pprint(get_date_range('https://www.bilibili.com/video/BV1ms4y117ow/?vd_source=58a41ac877c965b4616d2d9f764c219d'))
+    # pprint(Crawl.get_space_info(276134779))
+    # print(auto_wrap(text))
+    # Crawl.get_dm_likes(ccid, dmid)

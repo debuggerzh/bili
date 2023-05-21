@@ -5,7 +5,7 @@ from lib.util import load_side, load_episode
 from series.info import meta
 
 with st.sidebar:
-    ep_num, disable_history, dt = load_side(meta)
+    ep_num, disable_history, dt = load_side()
     gen = st.button('Generate')
 
 if disable_history:
