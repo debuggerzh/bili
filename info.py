@@ -1,101 +1,30 @@
-import sys
-import psutil
 import streamlit as st
+from streamlit_profiler import Profiler
 
-from lib.db import add_video, query_video, upd_video
-from lib.meta import get_metadata, get_raw
-from lib.util import *
-
-types = ('view', 'danmaku', 'like', 'coin', 'favorite', 'share', 'reply')
-
+from lib.meta import show_series_meta, show_user_info, show_video_meta
 
 # todo 合三为一！
 
-def show_meta(refresh: bool):
-    if len(vid_url) == 0:
-        return
-    tup = get_metadata(vid_url)
-    if tup is None:
-        st.error('Invalid url. Please input again.')
-    else:
-        metadata, _ = tup
-        store_sessssion_state(metadata, vid_url)
-        cid = metadata['cid']
-        bvid = metadata['bvid'].lower()
-        title = metadata['title']
-        aid = metadata['aid']
-        img_url = metadata['pic']
-        stat = metadata['stat']
-        wrapped = auto_wrap(metadata['desc'])
-
-        st.title(title)
-        tags = show_tags(aid, cid, show=True)
-        if debug:
-            cid
-            sys.platform
-            for p in psutil.process_iter():
-                print(p.name())  # 进程名
-        video_dict = query_video(cid)
-
-        if video_dict:
-            if refresh:
-                upd_video(cid, pic=img_url, tags=tags, title=title, desc=wrapped,
-                          view=stat['view'], danmaku=stat['danmaku'], reply=stat['reply'],
-                          favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-                          like=stat['like'])
-            else:
-                video_dict['bvid']
-                aid = video_dict['aid']
-                img_url = video_dict['pic']
-                stat = {k: v for k, v in video_dict.items() if k in types}
-                # tag_data = [{'tag_name': name} for name in video_dict['tags'].split('#')]
-                # show_tags(data=tag_data, show=True)
-                wrapped = video_dict['desc']
-        else:
-            # tags = show_tags(aid, cid)
-            add_video(pic=img_url, tags=tags, title=title, bvid=bvid, cid=cid, aid=aid,
-                      desc=wrapped,
-                      view=stat['view'], danmaku=stat['danmaku'], reply=stat['reply'],
-                      favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-                      like=stat['like']
-                      )
-
-        # dbutil = DBUtil(
-        #     pic=img_url, tags=tags, title=title, bvid=bvid, cid=cid, aid=aid,
-        #     desc=wrapped,
-        #     # 以下为统计数据
-        #     view=stat['view'], danmaku=stat['danmaku'], reply=stat['reply'],
-        #     favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-        #     like=stat['like']
-        # )
-        # st.session_state.dbutil = dbutil
-        st.divider()
-
-        # lft, rt = st.columns([0, 9])
-        # with lft:
-        #     pass
-        #     # st.metric('UP主', metadata['owner']['name'])
-        #     # st.image(get_raw(metadata['owner']['face']))
-        # with rt:
-
-        image_raw = get_raw(img_url)
-        st.image(image_raw, caption='视频封面')
-
-        rearrange_stat(stat, True)
-        st.divider()
-        st.header('视频简介')
-
-        st.text(wrapped)
-        show_top3_comments(aid)
-
-
 with st.sidebar:
-    st.session_state.flush = False
-    vid_url = st.text_input('Please input video url:', key='vid_url',
-                            on_change=show_meta, args=(st.session_state.flush,))
-    flush = st.checkbox('Force flush database', key='flush')
-    debug = st.checkbox('DEBUG')
-    start = st.button('Start', on_click=show_meta, args=(st.session_state.flush,))
+    mode = st.radio('Select mode:', ('Single', 'Series', 'User'), key='mode')
+    st.session_state.mode
+    if mode == 'Single':
+        input_text = '请输入视频链接：'
+        help_text = 'https://www.bilibili.com/video/BVxxxxxxxx'
+        show_func = show_video_meta
+    elif mode == 'Series':
+        input_text = '请输入剧集链接：'
+        help_text = 'https://www.bilibili.com/bangumi/media/mdxxx'
+        show_func = show_series_meta
+    else:
+        input_text = '请输入UP主空间链接：'
+        help_text = 'https://space.bilibili.com/108618052'
+        show_func = show_user_info
+    st.text_input(input_text, key='url', help=help_text,
+                  autocomplete='url', )
+    st.checkbox('Force flush database', key='flush')
+    st.button('Start', on_click=show_func)
+
 # def show_hot_danmakus(danmakus_csv: str, cid: int):
 #     df = Crawl.crawl_save(danmakus_csv.format(cid), cid, _need_likes=False)
 #     st.header('热门弹幕')
@@ -106,3 +35,8 @@ with st.sidebar:
 # vid_url = r'https://www.bilibili.com/video/BV1ms4y117ow'  学习区:11
 # https://www.bilibili.com/video/BV1t34y157sn/  虚拟区:247
 # https://www.bilibili.com/video/BV1i44y167KL/? 体育：991
+
+# series_url = r'https://www.bilibili.com/bangumi/media/md28229055'
+# https://www.bilibili.com/bangumi/media/md787
+
+# https://space.bilibili.com/108618052

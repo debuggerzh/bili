@@ -1,7 +1,7 @@
 critical_cookie = {
     'DedeUserID': '12696567',
-    'SESSDATA': 'b3381589%2C1699592988%2C377cf%2A52',
-    'bili_jct': '537db12561485d8eb0d9c73ee3bf552b'
+    'SESSDATA': 'a14efaf6%2C1699845468%2C9ab5d%2A52',
+    'bili_jct': '533860060cbc66db423cd512e016531b'
 }
 date_headers = {
     "referer": "https://www.bilibili.com/",
@@ -21,3 +21,4 @@ kuai_proxies = {
     "http": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": proxy_ip},
     "https": "http://%(user)s:%(pwd)s@%(proxy)s/" % {"user": username, "pwd": password, "proxy": proxy_ip}
 }
+types = ('view', 'danmaku', 'like', 'coin', 'favorite', 'share', 'reply')

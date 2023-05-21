@@ -1,10 +1,9 @@
-import json
 import os
 import random
+from datetime import datetime
 import jieba
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
 import plotly.express as px
 from collections import Counter
@@ -12,13 +11,13 @@ from PIL import Image
 from matplotlib import pyplot as plt, ticker as mticker
 from matplotlib.figure import Figure
 from pandas import DataFrame
-from requests import RequestException
+from streamlit_profiler import Profiler
 from wordcloud import WordCloud
 
-from lib.info import user_headers
-from lib.meta import get_cid
+from lib.db import query_danmaku_by_date, get_all_danmaku_text, DBUtil
+from lib.meta import get_cid, get_metadata
 from lib.sentiment import sentiment_analyze, get_distribution
-from lib.util import util, Contstant, Crawl, get_date_range, dm_history
+from lib.util import util, Contstant, Crawl, get_date_range, convert_df, get_user_videos
 
 __all__ = ['st_draw_sentiment', 'draw_history_bars', 'draw_multi_history_bars',
            'draw_pie', 'draw_multi_radar_graph', 'draw_stacked_bars_graph',
@@ -32,11 +31,12 @@ def draw_pie(dfm: DataFrame, **kwargs) -> Figure:
     :return:
     """
     # dfm = Crawl.crawl_save(file, cid)
-    counter, _ = sentiment_analyze(dfm['text'].tolist())
-    df = pd.DataFrame(list(counter.items()), columns=['label', 'ratio'])
-    figure = px.pie(df, values='ratio', names='label',
-                    color_discrete_sequence=('blue', 'yellow', 'green', 'red'))
-    return figure
+    with Profiler():
+        counter, _ = sentiment_analyze(dfm['text'].tolist())
+        df = pd.DataFrame(list(counter.items()), columns=['label', 'ratio'])
+        figure = px.pie(df, values='ratio', names='label',
+                        color_discrete_sequence=('blue', 'yellow', 'green', 'red'))
+        return figure
 
     labels = list(counter)
     ratios = list(counter.values())
@@ -151,18 +151,19 @@ def draw_heat_curve(dfm: DataFrame, duration: int, intervals: int):
 
 @st.cache_data
 def draw_multi_curve(dfm: DataFrame, duration: int, intervals: int):
-    # dfm = Crawl.crawl_save(file, cid)
-    interval = (duration - 1) // intervals + 1
-    result = get_distribution(dfm, duration, intervals, multi=True)
-    fig, axs = plt.subplots(8, 1, sharex=True)
-    labels = ('happy', 'like', 'anger', 'sad', 'surprise', 'disgust', 'fear', "multi")
-    colors = ('cyan', 'yellow', 'red', 'blue', 'magenta', 'green', 'black', 'cyan')
-    for i in range(8):
-        line, = axs[i].plot(range(intervals), [x[i] for x in result], color=colors[i])
-        line.set_label(labels[i])
-    plt.xlabel(f'Time/{interval}s')
-    fig.legend()
-    return fig
+    with Profiler():
+        # dfm = Crawl.crawl_save(file, cid)
+        interval = (duration - 1) // intervals + 1
+        result = get_distribution(dfm, duration, intervals, multi=True)
+        fig, axs = plt.subplots(8, 1, sharex=True)
+        labels = ('happy', 'like', 'anger', 'sad', 'surprise', 'disgust', 'fear', "multi")
+        colors = ('cyan', 'yellow', 'red', 'blue', 'magenta', 'green', 'black', 'cyan')
+        for i in range(8):
+            line, = axs[i].plot(range(intervals), [x[i] for x in result], color=colors[i])
+            line.set_label(labels[i])
+        plt.xlabel(f'Time/{interval}s')
+        fig.legend()
+        return fig
 
 
 @st.cache_data
@@ -181,24 +182,26 @@ def st_draw_wordcloud(file, cid):
 
 @st.cache_data
 def draw_multi_history_bars(_vid: str, cid: int, samples: int):
-    dt_range = get_date_range(_vid)
-    step = len(dt_range) // samples
-    if step:
-        dt_range = dt_range[:step * samples:step]
-    results = []
-    for dt in dt_range:
-        dmk_list = dm_history(cid, dt)
-        counter, _ = sentiment_analyze(dmk_list, True)
-        results.append(tuple(counter.values()))
-    fig, axs = plt.subplots(8, 1, sharex='all')
-    labels = ('happy', 'like', 'anger', 'sad', 'surprise', 'disgust', 'fear', "multi")
-    colors = ('cyan', 'yellow', 'red', 'blue', 'magenta', 'green', 'black', 'cyan')
-    for i in range(8):
-        line, = axs[i].plot(range(len(dt_range)), [x[i] for x in results], color=colors[i])
-        line.set_label(labels[i])
-    plt.xticks(range(len(dt_range)), dt_range, rotation=45)
-    fig.legend()
-    return fig
+    with Profiler():
+        dt_range = get_date_range(_vid)
+        step = len(dt_range) // samples
+        if step:
+            dt_range = dt_range[:step * samples:step]
+        results = []
+        for dt in dt_range:
+            # dmk_list = dm_history(cid, dt)
+            dmk_list = query_danmaku_by_date(cid, dt)
+            counter, _ = sentiment_analyze(dmk_list, True)
+            results.append(tuple(counter.values()))
+        fig, axs = plt.subplots(8, 1, sharex='all')
+        labels = ('happy', 'like', 'anger', 'sad', 'surprise', 'disgust', 'fear', "multi")
+        colors = ('cyan', 'yellow', 'red', 'blue', 'magenta', 'green', 'black', 'cyan')
+        for i in range(8):
+            line, = axs[i].plot(range(len(dt_range)), [x[i] for x in results], color=colors[i])
+            line.set_label(labels[i])
+        plt.xticks(range(len(dt_range)), dt_range, rotation=45)
+        fig.legend()
+        return fig
 
 
 @st.cache_data
@@ -221,7 +224,8 @@ def draw_history_bars(_vid: str, cid: int, samples: int):
     #     os.mkdir(cur_directory)
     results = []
     for dt in dt_range:
-        dmk_list = dm_history(cid, dt)
+        # dmk_list = dm_history(cid, dt)
+        dmk_list = query_danmaku_by_date(cid, dt)
         counter, _ = sentiment_analyze(dmk_list)
         results.append(tuple(counter.values()))
     posi = [x[0] for x in results]
@@ -375,34 +379,20 @@ def cal_sentiment_value(dt: DataFrame):
 
 
 @st.cache_data
-def st_draw_user_wordcloud(uid):
-    directory = os.path.join('resources', 'danmakus', uid)
-    if not os.path.exists(directory):
-        os.mkdir(directory)
-    search_url = 'https://api.bilibili.com/x/space/arc/search'
-    params = {'mid': uid, 'ps': 30, 'tid': 0, 'pn': 1, 'keyword': '',
-              'order': 'click'  # 按点击量降序
-              }
-    resp = requests.get(search_url, params, headers=user_headers, stream=True)
-    try:
-        data = resp.json()['data']
-    except RequestException:
-        decoder = json.JSONDecoder()
-        text = resp.text
-        while text:
-            json_data, index = decoder.raw_decode(text)
-            text = text[index:].lstrip()
-            if 'data' in json_data:
-                data = json_data['data']
-                break
-
-    videos = data['list']['vlist']
+def st_draw_user_wordcloud(uid: int, v_num: int):
+    # directory = os.path.join('resources', 'danmakus', uid)
+    # if not os.path.exists(directory):
+    #     os.mkdir(directory)
+    # todo 加入下载功能
+    videos = get_user_videos(uid)
     danmaku_list = []
-    for v in videos:
-        bvid = v['bvid']
+    for idx in range(v_num):
+        bvid = videos[idx]['bvid']
         cid = get_cid(bvid)
-        df = Crawl.crawl_save(os.path.join(directory, f'{bvid}.csv'), cid)
-        danmaku_list.extend(df['text'])
+        meta = get_metadata(bvid)[0]
+        # df = Crawl.crawl_save(os.path.join(directory, f'{bvid}.csv'), cid)
+        dmks = get_all_danmaku_text(cid, meta)
+        danmaku_list.extend(dmks)
     figure = draw_wordcloud(danmaku_list)
     return figure
 
@@ -432,3 +422,93 @@ def draw_wordcloud(dmks: list[str]):
     plt.imshow(wc, interpolation="bilinear")
     plt.axis("off")
     return fig
+
+
+def show_cloud():
+    with Profiler():
+        metadata = st.session_state.meta
+        cid = metadata['cid']
+        with st.spinner('正在生成弹幕词云...'):
+            if st.session_state.disable_history:  # 全弹幕
+                dmks = get_all_danmaku_text(cid)
+                fig = draw_wordcloud(dmks)
+                # fig = st_draw_wordcloud(st.session_state.csv, metadata['cid'])
+                st.pyplot(fig)
+                with st.spinner('正在准备下载...'):
+                    df = DBUtil.get_all2df(cid)
+                    st.info('请使用UTF-8编码打开')
+                    # df: DataFrame = Crawl.crawl_save(st.session_state.csv, metadata['cid'])
+                    st.download_button('Download danmaku file',
+                                       convert_df(df),
+                                       os.path.basename(st.session_state.csv),
+                                       on_click=lambda: st.info('请使用UTF-8编码打开'),
+                                       mime='text/csv')
+            else:
+                strftime = st.session_state.dt.strftime('%Y-%m-%d')
+                dmks = query_danmaku_by_date(cid, strftime)
+                if len(dmks) == 0:
+                    st.error('这一天没有任何弹幕记录。')
+                    st.stop()
+                # dmks = dm_history(cid, date)
+                fig = draw_wordcloud(dmks)
+                st.pyplot(fig)
+                hist_file_path = os.path.join(os.path.dirname(st.session_state.csv),
+                                              f'{cid}_{strftime}.csv')
+                df: DataFrame = DBUtil.get_all2df_by_date(cid, strftime)
+                st.download_button('Download danmaku file',
+                                   convert_df(df),
+                                   os.path.basename(hist_file_path),
+                                   mime='text/csv')
+
+
+def show_side():
+    metadata: dict = st.session_state.meta
+    mode = st.session_state.mode
+
+    with st.sidebar:
+        if mode == 'Series':
+            show_all = st.checkbox(
+                '显示全剧集词云', key='all',
+                # 注意这参数只改变label的可见性
+                # label_visibility='collapsed' if mode != 'Series' else 'visible'
+            )
+            ep: int = st.number_input(
+                '请输入集数', 1, metadata.get('total', 1),
+                disabled=show_all, key='episode',
+            )
+        if mode != 'User':
+            disable_history = st.checkbox('Disable history danmaku',
+                                          value=True,
+                                          key='disable_history')
+
+        if mode == 'Single':
+            show_func = show_cloud
+            vid = st.session_state.vid
+        elif mode == 'Series':
+            show_func = None
+            vid = metadata['episodes'][ep - 1]['bvid']
+        else:  # USER
+            disable_history = True
+            show_func = show_user_cloud
+            st.slider('选取视频数量', min_value=1,
+                      max_value=metadata['v_num'], key='v_num')
+        # 这时再获取日期
+        if not disable_history:
+            with st.spinner('正在查询历史弹幕日期范围...'):
+                date_range = get_date_range(vid)
+                st.session_state.latest_date = datetime.strptime(date_range[-1],
+                                                                 '%Y-%m-%d')
+                st.session_state.earliest_date = datetime.strptime(date_range[0],
+                                                                   '%Y-%m-%d')
+            st.date_input('Back to:', value=st.session_state.latest_date,
+                          key='dt', disabled=disable_history,
+                          min_value=st.session_state.earliest_date,
+                          max_value=st.session_state.latest_date,
+                          )
+        st.button('Generate', on_click=show_func)
+
+
+def show_user_cloud():
+    uid = st.session_state.uid
+    figure = st_draw_user_wordcloud(uid, st.session_state.v_num)
+    st.pyplot(figure)

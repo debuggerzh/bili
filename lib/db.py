@@ -11,7 +11,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from lib.crc32 import crack
-from lib.util import Crawl, get_up_info
+from lib.util import Crawl, get_up_info, show_tags, auto_wrap
 
 engine = create_engine('mysql+pymysql://root:123456@127.0.0.1:3306/bili')
 Session = sessionmaker(bind=engine)
@@ -22,7 +22,51 @@ class Series(Base):
     __tablename__ = 'series'
 
     mid = Column(Integer, primary_key=True)
-    name = Column(String(255))
+    season_title = Column(String(255))
+    tags = Column(String(255))
+
+    coins = Column(Integer)
+    danmakus = Column(Integer)
+    favorite = Column(Integer)
+    likes = Column(Integer)
+    reply = Column(Integer)
+    share = Column(Integer)
+    views = Column(Integer)
+
+    cover = Column(String(255))
+    evaluate = Column(String(255))  # 简介
+    titles = Column(Text)
+    actors = Column(String(255))
+    staff = Column(String(255))
+
+
+def query_series(mid: int):
+    session = Session()
+    with session.begin():
+        res: Result = session.query(Series).filter(Series.mid == mid)
+        series = res.first()
+        if not series:
+            return
+        else:
+            new_new = deepcopy(vars(series))
+            return new_new
+
+
+def add_series(mid: int, **kwargs):
+    session = Session()
+    with session.begin():
+        if query_series(mid) is None:
+            session.add(Series(mid=mid, **kwargs))
+
+
+def upd_series(mid: int, **kwargs):
+    session = Session()
+    with session.begin():
+        series = session.query(Series).filter(Series.mid == mid).first()
+        if not series:
+            session.add(Series(mid=mid, **kwargs))
+            return
+        series.__dict__.update(kwargs)
 
 
 class User(Base):
@@ -30,7 +74,7 @@ class User(Base):
 
     uid = Column(BigInteger, primary_key=True)
     name = Column(String(255))
-    sex = Column(SmallInteger())
+    sex = Column(String(2))
     birthday = Column(String(5))
     face = Column(String(255))
     fans = Column(Integer)
@@ -87,9 +131,9 @@ def query_danmaku_by_date(cid: int, fmt_date: str):
     this_day = datetime.strptime(fmt_date, fmt)
     start = int(this_day.timestamp())
     one_day = timedelta(days=1)
-    end = int((this_day+one_day).timestamp())
+    end = int((this_day + one_day).timestamp())
     session = Session()
-    with session.begin():   # 左开右闭
+    with session.begin():  # 左开右闭
         dmks = session.query(Danmaku.text).filter(Danmaku.cid == cid,
                                                   Danmaku.date >= start,
                                                   Danmaku.date < end).all()
@@ -102,13 +146,17 @@ def query_danmaku_by_date(cid: int, fmt_date: str):
 def add_video(**kwargs):
     session = Session()
     with session.begin():
-        session.add(Video(**kwargs))
+        if not query_video(kwargs['cid']):
+            session.add(Video(**kwargs))
 
 
 def upd_video(cid: int, **kwargs):
     session = Session()
     with session.begin():
         video = session.query(Video).filter(Video.cid == cid).first()
+        if not video:
+            session.add(Video(cid=cid, **kwargs))
+            return
         video.__dict__.update(kwargs)
 
 
@@ -125,9 +173,9 @@ def query_video(cid: int):
 
 
 @st.cache_data
-def get_all_danmaku_text(cid: int):
+def get_all_danmaku_text(cid: int, meta: dict = None):
     if not has_danmaku(cid):
-        init_danmaku(cid)
+        init_danmaku(cid, meta)
     session = Session()
     with session.begin():
         dmks = session.query(Danmaku.text).filter(Danmaku.cid == cid).all()
@@ -141,7 +189,7 @@ def has_danmaku(cid: int):
     return True if count else False
 
 
-def init_danmaku(cid: int):
+def init_danmaku(cid: int, meta: dict = None):
     session = Session()
     with session.begin():
         soup = Crawl.get_danmakus_from_xml(cid, True)
@@ -159,6 +207,18 @@ def init_danmaku(cid: int):
             uid = crack(uhash)
             user_data = get_up_info(uid)
             add_user(uid, **user_data)
+            # 添加用户及视频，确保完整性
+            # meta不为空，以用户为主时需先添加视频
+            if meta:
+                aid = meta['aid']
+                stat = meta['stat']
+                tags = show_tags(aid, cid, show=False)
+                wrapped = auto_wrap(meta['desc'])
+                add_video(cid=cid, bvid=meta['bvid'], title=meta['title'], aid=aid,
+                          tags=tags, pic=meta['pic'], view=stat['view'],
+                          danmaku=stat['danmaku'], reply=stat['reply'],
+                          favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
+                          like=stat['like'], desc=wrapped)  # todo 过滤参数
             session.add(Danmaku(dmid=dmid, time=time, text=text, mode=mode,
                                 size=size, color=color, date=date,
                                 cid=cid, uid=uid))
@@ -188,16 +248,13 @@ def upd_user(uid: int, **kwargs):
     session = Session()
     with session.begin():
         user = session.query(User).filter(User.uid == uid).first()
+        if not user:
+            session.add(User(uid=uid, **kwargs))
+            return
         user.__dict__.update(kwargs)
 
 
 def add_user(uid: int, **kwargs):
-    if kwargs['sex'] == '女':
-        kwargs['sex'] = 0
-    elif kwargs['sex'] == '男':
-        kwargs['sex'] = 1
-    else:
-        kwargs['sex'] = 2
     session = Session()
     with session.begin():
         if not has_user(uid):
