@@ -21,7 +21,7 @@ st.stop()
 
 c = Counter(correct=0, wrong=0, fail=0)
 dbutil: DBUtil = st.session_state.dbutil
-df = dbutil.get_all2df()
+df = dbutil.get_all_danmaku2df()
 df = classify_test(df)
 for row in df.itertuples():
     uid = crack(row.user)

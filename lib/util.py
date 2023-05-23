@@ -15,7 +15,7 @@ import streamlit as st
 from retrying import retry
 
 from lib.dm_pb2 import DmSegMobileReply
-from lib.info import date_headers, critical_cookie, user_headers, kuai_proxies
+from lib.info import date_headers, critical_cookie, user_headers, kuai_proxies, avbvid_pattern, types
 
 __all__ = ['auto_wrap', 'show_tags', 'show_top3_comments', 'store_sessssion_state',
            'rearrange_stat', 'Crawl']
@@ -100,7 +100,7 @@ class Crawl:
             resp_json = resp.json()
             if resp_json['code'] in err_code:
                 final_dict = dict.fromkeys(remain, '')
-                final_dict['school'] = ''
+                final_dict['school'] = None
                 final_dict['level'] = -1  # 表示号寄了
                 final_dict['sex'] = 2  # 表示保密
             else:
@@ -111,8 +111,12 @@ class Crawl:
                 if 'school' in data and data['school']:
                     if 'name' in data['school']:
                         final_dict['school'] = data['school']['name']
+                        if len(final_dict['school']) == 0:
+                            final_dict['school'] = None
+                    else:
+                        final_dict['school'] = None
                 else:
-                    final_dict['school'] = ''
+                    final_dict['school'] = None
         except (KeyError, AttributeError, TypeError) as e:
             print(uid, type(e), e)
             raise e
@@ -255,7 +259,6 @@ def get_date_range(vid: str):
 
     :return:
     """
-    from lib.meta import get_metadata
     meta = get_metadata(vid)[0]
     month_url = 'https://api.bilibili.com/x/v2/dm/history/index?type=1&oid={}&month={}'
     # date_url = 'https://api.bilibili.com/x/v2/dm/history?type=1&oid={}&date={}'
@@ -275,7 +278,7 @@ def get_date_range(vid: str):
         if month_data:
             days.extend(month_data)
         else:
-            print(response.text)
+            st.write(response.text)
     return days
 
 
@@ -372,15 +375,17 @@ def get_up_info(uid):
     """
     final_dict = {}
     final_dict.update(Crawl.get_space_info(uid))
-
-    top_url = 'https://api.bilibili.com/x/space/top/arc'
-    remain = ('title', 'desc', 'pic')
-    try:
-        resp = requests.get(top_url, params={'vmid': uid}, headers=user_headers)
-        data = resp.json()['data']
-        final_dict.update({k: str(v) for k, v in data.items() if k in remain})
-    except AttributeError as e:
-        print(e)
+    # 代表作
+    most_bvid = get_user_videos(uid)[0]['bvid']
+    final_dict['most_bvid'] = most_bvid
+    # top_url = 'https://api.bilibili.com/x/space/top/arc'
+    # remain = ('title', 'desc', 'pic')
+    # try:
+    #     resp = requests.get(top_url, params={'vmid': uid}, headers=user_headers)
+    #     data = resp.json()['data']
+    #     final_dict.update({k: str(v) for k, v in data.items() if k in remain})
+    # except AttributeError as e:
+    #     print(e)
 
     relation_url = 'https://api.bilibili.com/x/relation/stat'
     try:
@@ -518,9 +523,70 @@ def get_user_videos(uid):
     return videos
 
 
+def get_avbvid(url):
+    if "b23.tv" in url:
+        r = requests.head(url, headers=user_headers)
+        url = r.headers['Location']
+    try:
+        avbvid = avbvid_pattern.search(url).group(0)
+    except AttributeError:
+        return
+
+    url = url.strip("/")
+    m_obj = re.search(r"[?&]p=(\d+)", url)
+    p = 0
+    if m_obj:
+        p = int(m_obj.group(1))
+    # s_pos = url.rfind("/") + 1
+    # r_pos = url.rfind("?")
+    # avbvid = None
+    # if r_pos == -1:
+    #     avbvid = url[s_pos:]
+    # else:
+    #     avbvid = url[s_pos:r_pos]
+    if avbvid.startswith("av") or avbvid.startswith('AV'):
+        return "aid", avbvid[2:], p
+    elif avbvid.startswith("bv") or avbvid.startswith('BV'):
+        return "bvid", avbvid, p
+
+
+@st.cache_data
+def get_metadata(url):
+    """
+
+    :param url: B站单个视频的链接
+    :return: metadata, 分p（不分p返回0）
+    链接无法识别时，返回None
+    """
+    tup = get_avbvid(url)
+    if tup is None:
+        return
+    typ, avbvid, p = tup
+    res = requests.get(
+        f"https://api.bilibili.com/x/web-interface/view?{typ}={avbvid}",
+        headers=user_headers)
+    res.encoding = "u8"
+    data: dict = res.json()['data']
+    return data, p
+
+
+def extract_meta(metadata):
+    video_keys = ('cid', 'bvid', 'title', 'aid', 'pic',)
+    extracted = {k: str(v) for k, v in metadata.items()
+                 if k in video_keys}
+    extracted_stat = {k: v for k, v in metadata['stat'].items()
+                      if k in types}
+    # extracted.update(extracted_stat)
+    extracted['stat'] = extracted_stat
+    extracted['desc'] = auto_wrap(metadata['desc'])
+    tags = show_tags(extracted['aid'], extracted['cid'], show=False)
+    extracted['tag'] = tags
+    return extracted
+
+
 if __name__ == '__main__':
     vid_u = "https://www.bilibili.com/video/BV1XW411F7L6/?vd_source=58a41ac877c965b4616d2d9f764c219d"
-    # print(get_date_range(vid_url))
+    print(get_date_range(vid_u))
     text = '''我真的觉得很恐怖，就是有一个人开盒了我在别的平台看直播的私人账号，然后开小号把这个账号发给了我的老公粉。跟我的老公粉说我背地里在看别的男主播，叫他们不要再喜欢我了不要再给我送礼物了。
 我觉得这个事情很恐怖啊，首先，这个人他真的很阴暗，其次，他是出于什么目的、出于什么身份的呢？
 他是我的粉丝？还是我的竞争对手？自己没有能力打倒我，就只能躲在阴暗的角落里，想要借刀杀人，传我和别的男人的绯闻，然后利用我粉丝对我的爱，想让我粉丝把我一刀捅死是吧。
@@ -533,11 +599,11 @@ if __name__ == '__main__':
 我们对于喜欢的人，给予支持、传达爱意，但是不能太过于极端，喜欢一个人，并不一定就要得到她。只需要看到她在你能看到的地方过得很好，有因为你的支持越来越好，就好了。偶像的存在，更多的是传达梦想，以及积极的共鸣，和粉丝共勉，共同进步，越过越好。
 不要让爱，变成一种枷锁。
 我永远也不会想要得到我的偶像，因为星星，只需要在我看得见的地方闪闪发光就好了。'''
-    ccid = 42177257
+    # ccid = 42177257
     # dmid = 30370332169732101
-    pprint(get_user_videos(3461565011462803))
+    # pprint(get_user_videos(3461565011462803)[0])
     # pprint(get_up_info(3461565011462803))
-    # pprint(Crawl.get_space_info(3461565011462803))
+    # pprint(Crawl.get_space_info(5970160))
     # pprint(get_date_range('https://www.bilibili.com/video/BV1ms4y117ow/?vd_source=58a41ac877c965b4616d2d9f764c219d'))
     # pprint(Crawl.get_space_info(276134779))
     # print(auto_wrap(text))

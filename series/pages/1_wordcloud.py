@@ -3,7 +3,7 @@ import streamlit as st
 from pandas import DataFrame
 from streamlit import session_state as sst
 
-from lib.draw import st_draw_wordcloud, draw_wordcloud
+from lib.draw import show_series_cloud
 from lib.util import load_side, Crawl
 
 if 'meta' not in sst:
@@ -31,25 +31,6 @@ def load_series(suffix: str = '') -> list:
             episodes[ep]['cid'])
         all_text.extend(dtf['text'].tolist())
     return all_text
-
-
-def show_series_cloud():
-    with st.spinner('正在生成弹幕词云...'):
-        if sst.all:  # 全剧集词云
-            if sst.dis_hist:  # 禁历史
-                text = load_series()
-            else:
-                text = load_series(sst.date.strftime('%Y-%m-%d'))
-            figure = draw_wordcloud(text)
-        else:  # 单集词云
-            current_ep: dict = meta['episodes'][ep_num - 1]
-            cid = current_ep['cid']
-            if sst.dis_hist:
-                figure = st_draw_wordcloud(os.path.join(dmk_dir, f'{ep_num}.csv'), cid)
-            else:
-                date_str = sst.date.strftime('%Y-%m-%d')
-                figure = st_draw_wordcloud(os.path.join(dmk_dir, f'{ep_num}_{date_str}.csv'), cid)
-        st.pyplot(figure)
 
 
 st.sidebar.button('Generate', on_click=show_series_cloud)  # 忽略返回值

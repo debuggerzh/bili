@@ -4,10 +4,10 @@ from streamlit_profiler import Profiler
 from lib.meta import show_series_meta, show_user_info, show_video_meta
 
 # todo 合三为一！
+st.session_state.debug = True
 
 with st.sidebar:
     mode = st.radio('Select mode:', ('Single', 'Series', 'User'), key='mode')
-    st.session_state.mode
     if mode == 'Single':
         input_text = '请输入视频链接：'
         help_text = 'https://www.bilibili.com/video/BVxxxxxxxx'
@@ -23,6 +23,7 @@ with st.sidebar:
     st.text_input(input_text, key='url', help=help_text,
                   autocomplete='url', )
     st.checkbox('Force flush database', key='flush')
+    # st.checkbox('DEBUG', key='debug', help='开启后不记录弹幕用户信息', value=True)
     st.button('Start', on_click=show_func)
 
 # def show_hot_danmakus(danmakus_csv: str, cid: int):

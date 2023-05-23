@@ -5,13 +5,13 @@ from pprint import pprint
 import pandas as pd
 import streamlit as st
 from pymysql.connections import Connection
-from sqlalchemy import Column, Integer, String, Text, Float, Result, func
+from sqlalchemy import Column, Integer, String, Text, Float, Result, func, or_
 from sqlalchemy import create_engine, BigInteger, SmallInteger, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from lib.crc32 import crack
-from lib.util import Crawl, get_up_info, show_tags, auto_wrap
+from lib.util import Crawl, get_up_info, show_tags, auto_wrap, get_metadata, extract_meta
 
 engine = create_engine('mysql+pymysql://root:123456@127.0.0.1:3306/bili')
 Session = sessionmaker(bind=engine)
@@ -23,7 +23,7 @@ class Series(Base):
 
     mid = Column(Integer, primary_key=True)
     season_title = Column(String(255))
-    tags = Column(String(255))
+    styles = Column(String(255))
 
     coins = Column(Integer)
     danmakus = Column(Integer)
@@ -40,6 +40,37 @@ class Series(Base):
     staff = Column(String(255))
 
 
+@st.cache_data
+def get_series_all_text(mid: int, date=None, ):
+    if date:
+        start = int(date.timestamp())
+        one_day = timedelta(days=1)
+        end = int((date + one_day).timestamp())
+    ids = get_series_ids(mid)
+    sep_danmakus: list[list[str]] = []
+    session = Session()
+    with session.begin():
+        for cid, bvid in ids:
+            if not has_danmaku(cid):
+                init_danmaku(cid, bvid, mid)
+            stmt = session.query(Danmaku.text).filter(Danmaku.cid == cid)
+            if date:
+                stmt = stmt.filter(Danmaku.date >= start, Danmaku.date < end)
+            res = stmt.all()
+            sep_danmakus.append([x[0] for x in res])
+    return sep_danmakus
+
+    session = Session()
+    with session.begin():
+        stmt = session.query(Danmaku.text).filter(Danmaku.cid.in_(
+            session.query(Video.cid).filter(Video.mid == mid)
+        ))
+        if date:
+            stmt = stmt.filter(Danmaku.date >= start, Danmaku.date < end)
+        dmks = stmt.all()
+    return [x[0] for x in dmks]
+
+
 def query_series(mid: int):
     session = Session()
     with session.begin():
@@ -52,11 +83,17 @@ def query_series(mid: int):
             return new_new
 
 
-def add_series(mid: int, **kwargs):
+def add_series(mid: int, episodes: list[dict], **kwargs):
     session = Session()
     with session.begin():
         if query_series(mid) is None:
             session.add(Series(mid=mid, **kwargs))
+        count = 1
+        for ep in episodes:
+            cid = ep['cid']
+            if not query_video(cid):
+                session.add(Video(cid=cid, bvid=ep['bvid'], mid=mid, seq=count))
+            count += 1
 
 
 def upd_series(mid: int, **kwargs):
@@ -83,9 +120,10 @@ class User(Base):
     sign = Column(String(255))
     v_num = Column(Integer)
     # todo 代表作存在冗余
-    pic = Column(String(255))  # 代表作封面
-    title = Column(String(255))
-    desc = Column(Text)
+    most_bvid = Column(String(12))
+    # pic = Column(String(255))  # 代表作封面
+    # title = Column(String(255))
+    # desc = Column(Text)
 
 
 class Video(Base):
@@ -96,7 +134,8 @@ class Video(Base):
     bvid = Column(String(12))
     aid = Column(Integer)
     mid = Column(Integer, ForeignKey('series.mid'))
-    tags = Column(String(255))
+    seq = Column(Integer)
+    tag = Column(String(255))
     pic = Column(String(255))
 
     view = Column(Integer)
@@ -107,6 +146,20 @@ class Video(Base):
     share = Column(Integer)
     like = Column(Integer)
     desc = Column(Text)
+
+
+def get_series_total(mid):
+    session = Session()
+    with session.begin():
+        result = session.query(func.count('*')).filter(Video.mid == mid).scalar()
+    return result
+
+
+def get_series_ids(mid):
+    session = Session()
+    with session.begin():
+        result = session.query(Video.cid, Video.bvid).filter(Video.mid == mid).all()
+    return result
 
 
 class Danmaku(Base):
@@ -124,7 +177,7 @@ class Danmaku(Base):
 
 
 def query_danmaku_by_date(cid: int, fmt_date: str):
-    # 转换为一天的时间戳范围
+    # todo 使用fmt多此一举
     if not has_danmaku(cid):
         init_danmaku(cid)
     fmt = '%Y-%m-%d'
@@ -144,26 +197,42 @@ def query_danmaku_by_date(cid: int, fmt_date: str):
 
 
 def add_video(**kwargs):
+    stat = kwargs.pop('stat')
     session = Session()
     with session.begin():
         if not query_video(kwargs['cid']):
-            session.add(Video(**kwargs))
+            session.add(Video(**kwargs, **stat))
 
 
 def upd_video(cid: int, **kwargs):
+    stat = kwargs.pop('stat')
     session = Session()
     with session.begin():
         video = session.query(Video).filter(Video.cid == cid).first()
         if not video:
-            session.add(Video(cid=cid, **kwargs))
+            session.add(Video(cid=cid, **kwargs, **stat))
             return
         video.__dict__.update(kwargs)
+        video.__dict__.update(stat)
 
 
-def query_video(cid: int):
+def query_video(cid: int = None, bvid: str = None, **kwargs):
+    """
+
+    :param cid:
+    :param bvid:
+    :return: 查询结果的变量字典
+    """
+    mid = kwargs.get('mid', -1)
+    seq = kwargs.get('seq', -1)
     session = Session()
     with session.begin():
-        res: Result = session.query(Video).filter(Video.cid == cid)
+        from sqlalchemy import and_
+        res: Result = session.query(Video).filter(or_(
+            Video.cid == cid,
+            Video.bvid == bvid,
+            and_(Video.mid == mid, Video.seq == seq)
+        ))
         video = res.first()
         if not video:
             return
@@ -173,12 +242,20 @@ def query_video(cid: int):
 
 
 @st.cache_data
-def get_all_danmaku_text(cid: int, meta: dict = None):
+def get_all_danmaku_text(cid: int, bvid: str = None, mid: int = None, date=None):
+    if date:
+        start = int(date.timestamp())
+        one_day = timedelta(days=1)
+        end = int((date + one_day).timestamp())
     if not has_danmaku(cid):
-        init_danmaku(cid, meta)
+        init_danmaku(cid, bvid, mid)
+
     session = Session()
     with session.begin():
-        dmks = session.query(Danmaku.text).filter(Danmaku.cid == cid).all()
+        stmt = session.query(Danmaku.text).filter(Danmaku.cid == cid)
+        if date:
+            stmt = stmt.filter(Danmaku.date >= start, Danmaku.date < end)
+        dmks = stmt.all()
     return [x[0] for x in dmks]
 
 
@@ -189,7 +266,7 @@ def has_danmaku(cid: int):
     return True if count else False
 
 
-def init_danmaku(cid: int, meta: dict = None):
+def init_danmaku(cid: int, bvid: str = None, mid: int = None):
     session = Session()
     with session.begin():
         soup = Crawl.get_danmakus_from_xml(cid, True)
@@ -203,26 +280,25 @@ def init_danmaku(cid: int, meta: dict = None):
             color = properties[3]  # 十进制
             date = properties[4]
             # uhash十六进制，这里B站做了调整，在最后增加了weight参数
-            uhash = properties[-3]
-            uid = crack(uhash)
-            user_data = get_up_info(uid)
-            add_user(uid, **user_data)
+            # st.write(st.session_state.debug)
+            if st.session_state.debug:
+                uid = None
+            else:
+                uhash = properties[-3]
+                uid = crack(uhash)
+                user_data = get_up_info(uid)
+                add_user(uid, **user_data)
             # 添加用户及视频，确保完整性
             # meta不为空，以用户为主时需先添加视频
-            if meta:
-                aid = meta['aid']
-                stat = meta['stat']
-                tags = show_tags(aid, cid, show=False)
-                wrapped = auto_wrap(meta['desc'])
-                add_video(cid=cid, bvid=meta['bvid'], title=meta['title'], aid=aid,
-                          tags=tags, pic=meta['pic'], view=stat['view'],
-                          danmaku=stat['danmaku'], reply=stat['reply'],
-                          favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-                          like=stat['like'], desc=wrapped)  # todo 过滤参数
+            # if bvid:  # todo 考虑用sst.meta
+            #     meta = get_metadata(bvid)[0]
+            #     extracted = extract_meta(meta)
+            #     if mid:
+            #         extracted['mid'] = mid
+            #     add_video(**extracted)
             session.add(Danmaku(dmid=dmid, time=time, text=text, mode=mode,
                                 size=size, color=color, date=date,
                                 cid=cid, uid=uid))
-            print(uid, dmid)
 
 
 def has_user(uid: int):
@@ -375,7 +451,7 @@ class DBUtil:
 
     @staticmethod
     @st.cache_data
-    def get_all2df(cid: int):
+    def get_all_danmaku2df(cid: int):
         if not has_danmaku(cid):
             init_danmaku(cid)
 
@@ -390,17 +466,18 @@ class DBUtil:
 
     @staticmethod
     @st.cache_data
-    def get_all2df_by_date(cid: int, fmt_date: str):
+    def get_all2df_by_date(cid: int, date: datetime):
         if not has_danmaku(cid):
             init_danmaku(cid)
-        fmt = '%Y-%m-%d'
-        this_day = datetime.strptime(fmt_date, fmt)
-        start = int(this_day.timestamp())
+        # fmt = '%Y-%m-%d'
+        # this_day = datetime.strptime(fmt_date, fmt)
+        start = int(date.timestamp())
         one_day = timedelta(days=1)
-        end = int((this_day + one_day).timestamp())
+        end = int((date + one_day).timestamp())
         conn = DBUtil.make_conn()
         with conn:
-            sql = "SELECT * FROM danmaku WHERE cid=%s AND `date`>=%s AND `date`<%s"
+            sql = """SELECT * FROM danmaku 
+            WHERE cid=%s AND `date`>=%s AND `date`<%s"""
             # with DBUtil.conn.cursor() as c:
             #     c.execute(sql)
             #     res = c.fetchall()

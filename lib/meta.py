@@ -1,5 +1,4 @@
 import re
-from pprint import pprint
 
 import requests
 import streamlit as st
@@ -7,15 +6,10 @@ from streamlit import session_state as sst
 from streamlit_profiler import Profiler
 
 from lib.db import query_video, upd_video, add_video, query_series
-from lib.info import types
-from lib.util import auto_wrap, get_up_info, store_sessssion_state, show_tags, rearrange_stat, show_top3_comments
+from lib.info import types, avbvid_pattern
+from lib.util import auto_wrap, get_up_info, store_sessssion_state, show_tags, rearrange_stat, show_top3_comments, \
+    get_metadata, extract_meta
 
-headers = {
-    "authority": "api.bilibili.com",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36",
-    "accept": "application/json, text/plain, */*",
-}
-avbvid_pattern = re.compile(r'(AV|av|BV|bv)\w+')
 table = 'fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTKNPAwcF'
 tr = {}
 for idx in range(58):
@@ -41,37 +35,6 @@ def bv2av(bvid: str):
     return (r - add) ^ xor
 
 
-def get_real_url(url):
-    r = requests.head(url, headers=headers)
-    return r.headers['Location']
-
-
-def get_avbvid(url):
-    if "b23.tv" in url:
-        url = get_real_url(url)
-    try:
-        avbvid = avbvid_pattern.search(url).group(0)
-    except AttributeError:
-        return
-
-    url = url.strip("/")
-    m_obj = re.search(r"[?&]p=(\d+)", url)
-    p = 0
-    if m_obj:
-        p = int(m_obj.group(1))
-    # s_pos = url.rfind("/") + 1
-    # r_pos = url.rfind("?")
-    # avbvid = None
-    # if r_pos == -1:
-    #     avbvid = url[s_pos:]
-    # else:
-    #     avbvid = url[s_pos:r_pos]
-    if avbvid.startswith("av") or avbvid.startswith('AV'):
-        return "aid", avbvid[2:], p
-    elif avbvid.startswith("bv") or avbvid.startswith('BV'):
-        return "bvid", avbvid, p
-
-
 def get_cid(url, all_cid=False):
     """
 
@@ -87,25 +50,6 @@ def get_cid(url, all_cid=False):
         return data["cid"]
     else:
         return cids[p]
-
-
-@st.cache_data
-def get_metadata(url):
-    """
-
-    :param url: B站单个视频的链接
-    :return: metadata, 分p（不分p返回0）
-    链接无法识别时，返回None
-    """
-    tup = get_avbvid(url)
-    if tup is None:
-        return
-    typ, avbvid, p = tup
-    res = requests.get(
-        f"https://api.bilibili.com/x/web-interface/view?{typ}={avbvid}", headers=headers)
-    res.encoding = "u8"
-    data: dict = res.json()['data']
-    return data, p
 
 
 def get_season_cids(sid):
@@ -156,6 +100,7 @@ def get_season_meta(url: str):
 
 
 if __name__ == '__main__':
+    d = get_season_meta('https://www.bilibili.com/bangumi/media/md787')
     first_url = "https://www.bilibili.com/video/BV1BD4y1u7pN?spm_id_from=333.999.0.0"
     title, cid = get_cid(first_url)
     print(title, cid)
@@ -168,39 +113,40 @@ def get_raw(img_url):
 
 def show_series_meta():
     series_input = st.session_state.url
-    meta: dict = get_season_meta(series_input)
-    if len(series_input) == 0:
-        return
-    if meta is None:
+    search = re.search(r'(?<=/md)\d+', series_input)
+    if search:
+        mid = int(search.group(0))
+        series_data = query_series(mid)
+        # 有数据且不刷新
+        if series_data:
+            if st.session_state.flush:
+                series_data = get_season_meta(series_input)
+                series_data = extract_series(series_data)
+                from lib.db import upd_series
+                upd_series(mid, **series_data)
+            else:
+                pass
+        else:
+            series_data = get_season_meta(series_input)
+            episodes = series_data['episodes']
+            # st.write(episodes);st.stop()
+            series_data = extract_series(series_data)
+            from lib.db import add_series
+            add_series(mid, episodes, **series_data)
+    else:
         st.error('Invalid url. Please input again.')
         return
-    episodes: list[dict] = meta['episodes']
-    stat = meta['stat']
-    critical_keys = ('actors', 'cover', 'evaluate', 'season_title', 'staff',)
-    critical_data = {k: v for k, v in meta.items()
-                     if k in critical_keys}
-    critical_data['tags'] = '#'.join(meta['styles'])
-    critical_data['titles'] = '\n'.join([ep['share_copy'] for ep in episodes])
-    critical_data.update(stat)
-    del critical_data['favorites']
-    sst.meta = meta
-    sst.mid = meta['media_id']
 
-    series_data = query_series(sst.mid)
-    if series_data:
-        if st.session_state.flush:
-            from lib.db import upd_series
-            upd_series(int(sst.mid), **critical_data)
-        else:
-            meta = series_data  # 直接赋引用即可
-    else:
-        from lib.db import add_series
-        add_series(int(sst.mid), **critical_data)
-    st.title(meta['title'])
+    sst.meta = series_data
+    sst.mid = mid
 
+    st.title(series_data['season_title'])
     # st.caption('Tags: ' + ' '.join(meta['styles']))
-    tag_data = [{'tag_name': name} for name in meta['styles']]
-    tags = show_tags(data=tag_data, show=True)
+    styles = series_data['styles']
+    if type(styles) is str:
+        styles = styles.split('#')
+    tag_data = [{'tag_name': name} for name in styles]
+    show_tags(data=tag_data, show=True)
 
     trans = {'coins': '总投币', 'danmakus': '总弹幕', 'favorite': '总收藏', 'likes': '总点赞',
              'reply': '总评论', 'share': '总转发', 'views': '总点击量'}
@@ -209,37 +155,49 @@ def show_series_meta():
         # todo 保持一致换用metric
         # todo 添加评分信息
         st.subheader('数据统计信息')
-        for tag, v in stat.items():
-            if tag == 'favorites':
-                continue
+        for tag in trans.keys():
+            v = series_data[tag]
             if v >= 9999:
                 num = str(round(v / 10000, 1)) + '万'
             else:
                 num = str(v)
             st.text(trans[tag] + ':' + num)
     with rt:
-        image_raw = requests.get(meta['cover']).content
+        image_raw = requests.get(series_data['cover']).content
         st.image(image_raw, use_column_width='always')
     # rearrange_stat(meta['stat'], True)
 
     st.header('简介')
-    st.text(auto_wrap(meta['evaluate']))
+    st.text(auto_wrap(series_data['evaluate']))
 
     lft, rt = st.columns(2)
     with lft:
         st.header('分集标题')
         with st.expander('查看分集标题'):
-            for ep in episodes:
-                st.text(ep['share_copy'])
+            for title in series_data['titles'].split('\n'):
+                st.text(title)
     with rt:
         st.header('演职员表')
         with st.expander('展开演职员表'):
             st.subheader('演员表')
-            actors_list = meta['actors'].split('\n')
-            st.text(meta['actors'])
+            actors_list = series_data['actors'].split('\n')
+            st.text(series_data['actors'])
             st.divider()
             st.subheader('职员表')
-            st.text(meta['staff'])
+            st.text(series_data['staff'])
+
+
+def extract_series(meta):
+    episodes: list[dict] = meta['episodes']
+    stat = meta['stat']
+    critical_keys = ('actors', 'cover', 'evaluate', 'season_title', 'staff',)
+    critical_data = {k: v for k, v in meta.items()
+                     if k in critical_keys}
+    critical_data['styles'] = '#'.join(meta['styles'])
+    critical_data['titles'] = '\n'.join([ep['share_copy'] for ep in episodes])
+    critical_data.update(stat)
+    del critical_data['favorites']
+    return critical_data
 
 
 def show_user_info():
@@ -250,16 +208,17 @@ def show_user_info():
         st.error('Invalid url. Please input again.')
         return
     st.session_state.uid = uid
-    user_data = get_up_info(uid)
     from lib.db import query_user
     user_dict = query_user(int(uid))
+
     if user_dict:
         if st.session_state.flush:
+            user_data = get_up_info(uid)
             from lib.db import upd_user
             upd_user(int(uid), **user_data)
-        else:
-            user_data = user_dict
+        user_data = user_dict
     else:
+        user_data = get_up_info(uid)
         from lib.db import add_user
         add_user(int(uid), **user_data)
     sst.meta = user_data
@@ -281,6 +240,8 @@ def show_user_info():
     cols = st.columns(len(tags))
     for tag, col in zip(tags, cols):
         content = user_data.get(tag, None)
+        if content == '':
+            content = None
         col.metric(trans[tag], content, help=str(content))
     # with lft:
     #     for tag in data:
@@ -294,14 +255,19 @@ def show_user_info():
     #     st.image(get_raw(data['face']))
 
     st.header('代表作')
-    st.subheader(user_data.get('title', None))
-    lft, rt = st.columns(2)
-    with lft:
-        st.text(auto_wrap(user_data.get('desc', ''), 2))
-    with rt:
-        pic = user_data.get('pic', '')
-        if pic:
-            st.image(get_raw(pic))
+    most_bvid = user_data.get('most_bvid', None)
+    if most_bvid:
+        most_meta = query_video(bvid=most_bvid)
+        if not most_meta:  # todo 持久化
+            most_meta = get_metadata(most_bvid)[0]
+        st.subheader(most_meta.get('title', None))
+        lft, rt = st.columns(2)
+        with lft:
+            st.text(auto_wrap(most_meta.get('desc', ''), 2))
+        with rt:
+            pic = most_meta.get('pic', '')
+            if pic:
+                st.image(get_raw(pic))
 
 
 def show_video_meta():
@@ -314,47 +280,31 @@ def show_video_meta():
         else:
             metadata, _ = tup
             store_sessssion_state(metadata, st.session_state.url)
-            cid = metadata['cid']
-            bvid = metadata['bvid'].lower()
-            title = metadata['title']
-            aid = metadata['aid']
-            img_url = metadata['pic']
-            stat = metadata['stat']
-            wrapped = auto_wrap(metadata['desc'])
+            extracted = extract_meta(metadata)
 
-            st.title(title)
-            tags = show_tags(aid, cid, show=True)
-            video_dict = query_video(cid)
-            if video_dict:
+            st.title(extracted['title'])
+            video_dict = query_video(extracted['cid'])
+            if video_dict:  # todo 使用字典解包
                 if st.session_state.flush:
-                    upd_video(cid, pic=img_url, tags=tags, title=title, desc=wrapped,
-                              view=stat['view'], danmaku=stat['danmaku'], reply=stat['reply'],
-                              favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-                              like=stat['like'])
+                    upd_video(**extracted)
                 else:
-                    video_dict['bvid']
-                    aid = video_dict['aid']
-                    img_url = video_dict['pic']
-                    stat = {k: v for k, v in video_dict.items() if k in types}
-                    # tag_data = [{'tag_name': name} for name in video_dict['tags'].split('#')]
-                    # show_tags(data=tag_data, show=True)
-                    wrapped = video_dict['desc']
+                    extracted = video_dict
             else:
                 # tags = show_tags(aid, cid)
-                add_video(pic=img_url, tags=tags, title=title, bvid=bvid, cid=cid, aid=aid,
-                          desc=wrapped,
-                          view=stat['view'], danmaku=stat['danmaku'], reply=stat['reply'],
-                          favorite=stat['favorite'], coin=stat['coin'], share=stat['share'],
-                          like=stat['like']
-                          )
+                add_video(**extracted)
 
             st.divider()
-            image_raw = get_raw(img_url)
+            image_raw = get_raw(extracted['pic'])
             st.image(image_raw, caption='视频封面')
 
+            if 'stat' not in extracted:
+                stat = {k: v for k, v in extracted.items()
+                        if k in types}
+            else:
+                stat = extracted['stat']
             rearrange_stat(stat, True)
             st.divider()
             st.header('视频简介')
 
-            st.text(wrapped)
-            show_top3_comments(aid)
+            st.text(extracted['desc'])
+            show_top3_comments(extracted['aid'])
