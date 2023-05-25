@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
 
 # 将仓库clone至/app下
 # RUN git clone https://github.com/debuggerzh/bili.git /app/bilipy
-# COPY bilipy .
+COPY . .
 RUN pip3 install -r requirements.txt
 
 EXPOSE 8501
