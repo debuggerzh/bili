@@ -46,8 +46,7 @@ imageio
 numpy
 streamlit
 pytest
-torch
-transformers
+
 PyMySQL
 plotly
 selenium

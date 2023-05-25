@@ -16,10 +16,10 @@ with st.sidebar:
         input_text = '请输入剧集链接：'
         help_text = 'https://www.bilibili.com/bangumi/media/mdxxx'
         show_func = show_series_meta
-    else:
-        input_text = '请输入UP主空间链接：'
-        help_text = 'https://space.bilibili.com/108618052'
-        show_func = show_user_info
+    # else:
+    #     input_text = '请输入UP主空间链接：'
+    #     help_text = 'https://space.bilibili.com/108618052'
+    #     show_func = show_user_info
     st.text_input(input_text, key='url', help=help_text,
                   autocomplete='url', )
     st.checkbox('Force flush database', key='flush')
