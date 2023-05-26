@@ -7,7 +7,6 @@ async-generator==1.10
 async-timeout==4.0.2
 attrs==22.2.0
 beautifulsoup4==4.11.2
-bilibili-api-python==15.3.1
 blinker==1.6.2
 Brotli==1.0.9
 cachetools==5.3.0
@@ -101,7 +100,6 @@ tokenizers==0.13.3
 toml==0.10.2
 tomli==2.0.1
 toolz==0.12.0
-torch==2.0.0
 tornado==6.3.1
 tqdm==4.65.0
 transformers==4.28.1
